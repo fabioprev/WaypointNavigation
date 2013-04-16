@@ -1,3 +1,11 @@
+/bin
+/build
+WaypointNavigation.config
+WaypointNavigation.creator
+WaypointNavigation.creator.user
+WaypointNavigation.files
+WaypointNavigation.includes
+
 # Compiled Object files
 *.slo
 *.lo
