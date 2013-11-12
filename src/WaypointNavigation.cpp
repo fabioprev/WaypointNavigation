@@ -18,11 +18,14 @@ using std_msgs::String;
 
 namespace SSI
 {
-	WaypointNavigation::WaypointNavigation(const string& serverActionName) : actionClient(serverActionName,true), nodeHandle("~"), nextPoint(0),
-																			 pathFilename(""), executingPath(false), isCyclic(false)
+	WaypointNavigation::WaypointNavigation(const string& serverActionName) : actionClient(serverActionName,true), nodeHandle("~"),
+																			 nextPoint(0), pathDirectory(""), pathFilename(""),
+																			 executingPath(false), isCyclic(false)
 	{
 		nodeHandle.getParam("agentId",agentId);
 		nodeHandle.getParam(PARAMS_FILE_NAME_SERVER,pathFilename);
+		
+		pathDirectory = pathFilename.substr(0,pathFilename.rfind("/"));
 		
 		subscriberCommandPath = nodeHandle.subscribe<String>(SUBSCRIBER_POINTS_LIST_STRING,1,boost::bind(&SSI::WaypointNavigation::commandPathCallback,
 																										 this,_1));
@@ -48,11 +51,15 @@ namespace SSI
 	
 	void WaypointNavigation::commandLoadCallback(const String::ConstPtr& message)
 	{
-		string command = message->data;
+		stringstream s;
+		string command = message->data, filename;
 		
 		transform(command.begin(),command.end(),command.begin(),::tolower);
 		
-		if (command == "reloadfile") loadFilePath();
+		s << command;
+		s >> command >> filename;
+		
+		if (command == "reloadfile") loadFilePath(pathDirectory + string("/") + filename);
 	}
 	
 	void WaypointNavigation::commandPathCallback(const String::ConstPtr& message)
@@ -82,22 +89,26 @@ namespace SSI
 		
 		transform(pathName.begin(),pathName.end(),pathName.begin(),::tolower);
 		
-		MapPosesQueue::iterator it = posesQueueMap.find(pathName);
-		
-		if (it == posesQueueMap.end()) isPathLoaded = initCustomPath(pathStream);
-		else isPathLoaded = initStandardPath(it);
-		
-		if (isPathLoaded)
+		if (pathName == "cancelling") actionClient.cancelAllGoals();
+		else
 		{
-			Utils::println("New path loaded correctly.\n",Utils::Green);
+			MapPosesQueue::iterator it = posesQueueMap.find(pathName);
 			
-			/// Cancelling old goals.
-			actionClient.cancelAllGoals();
-			goToNextGoal();
+			if (it == posesQueueMap.end()) isPathLoaded = initCustomPath(pathStream);
+			else isPathLoaded = initStandardPath(it);
 			
-			executingPath = true;
+			if (isPathLoaded)
+			{
+				Utils::println("New path loaded correctly.\n",Utils::Green);
+				
+				/// Cancelling old goals.
+				actionClient.cancelAllGoals();
+				goToNextGoal();
+				
+				executingPath = true;
+			}
+			else Utils::println("Failed in loading new path file.\n",Utils::Red);
 		}
-		else Utils::println("Failed in loading new path file.\n",Utils::Red);
 	}
 	
 	void WaypointNavigation::goalDoneCallback(const MoveBaseActionResult::ConstPtr&)
@@ -114,7 +125,7 @@ namespace SSI
 			String feedback;
 			stringstream s;
 			
-			s << "Agent " << agentId << ((posesQueue.size() == 1) ? " doneChasing" : "donePatroling");
+			s << "Agent " << agentId << ((posesQueue.size() == 1) ? " doneChasing" : " donePatroling");
 			
 			feedback.data = s.str();
 			publisherCoordinationFeedback.publish(feedback);
@@ -154,16 +165,16 @@ namespace SSI
 			/// 
 			///	Example:
 			///		- robot_1.launch:
-			///			< group ns="robot_1">
-			///				< remap from="/robot_1/map" to="/map" />
+			///			<group ns="robot_1">
+			///				<remap from="/robot_1/map" to="/map" />
 			///				...
-			///			</ group>
+			///			</group>
 			/// 
 			///		- robot_2.launch:
-			///			< group ns="robot_2">
-			///				< remap from="/robot_2/map" to="/map" />
+			///			<group ns="robot_2">
+			///				<remap from="/robot_2/map" to="/map" />
 			///				...
-			///			</ group>
+			///			</group>
 			
 			stringstream temp;
 			
@@ -215,7 +226,7 @@ namespace SSI
 		posesQueueMap.insert(emptyWaypointList());
 		
 		/// Reading configuration file.
-		bool loadFile = loadFilePath();
+		bool loadFile = loadFilePath(pathFilename);
 		
 		if (loadFile)
 		{
@@ -287,15 +298,20 @@ namespace SSI
 		return true;
 	}
 	
-	bool WaypointNavigation::loadFilePath()
+	bool WaypointNavigation::loadFilePath(const string& filename)
 	{
 		ifstream file;
 		string line, path;
 		
 		/// Opening file.
-		file.open(pathFilename.c_str());
+		file.open(filename.c_str());
 		
-		if (!file.is_open()) return false;
+		if (!file.is_open())
+		{
+			Utils::println(string("Failed to open file: ") + filename,Utils::Red);
+			
+			return false;
+		}
 		
 		/// Clearing old points' list.
 		posesQueueMap.clear();

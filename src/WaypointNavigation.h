@@ -91,6 +91,11 @@ namespace SSI
 			PosesQueue::iterator nextPoint;
 			
 			/**
+			 *	Represents the path of the directory containing all the files.
+			 */
+			std::string pathDirectory;
+			
+			/**
 			 *	Represents the name of the file containing the points' list.
 			 */
 			std::string pathFilename;
@@ -146,7 +151,7 @@ namespace SSI
 			 *	The path filename is read from a topic.
 			 *	@return returns true if the file has been read correctly, otherwise false.
 			 */
-			bool loadFilePath();
+			bool loadFilePath(const std::string& filename);
 			
 		public:
 			/**
