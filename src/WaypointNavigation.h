@@ -4,7 +4,6 @@
 #include <actionlib/client/simple_action_client.h>
 #include <geometry_msgs/Pose.h>
 #include <move_base_msgs/MoveBaseAction.h>
-#include <WaypointNavigation/FollowTargetAction.h>
 #include <ros/node_handle.h>
 #include <nav_msgs/Odometry.h>
 #include <std_msgs/String.h>
@@ -42,11 +41,6 @@ namespace SSI
 			actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction>* actionClient;
 			
 			/**
-			 *	Represents the object used for communicating with the follow_target navigation node.
-			 */
-			actionlib::SimpleActionClient< ::WaypointNavigation::FollowTargetAction>* actionClientFollowTarget;
-			
-			/**
 			 *	Handle to a ros node.
 			 */
 			ros::NodeHandle nodeHandle;
@@ -65,11 +59,6 @@ namespace SSI
 			 *	Subscriber associated to topic SUBSCRIBER_GOAL_DONE.
 			 */
 			ros::Subscriber subscriberGoalDone;
-			
-			/**
-			 *	Subscriber associated to topic SUBSCRIBER_GOAL_DONE.
-			 */
-			ros::Subscriber subscriberGoalDoneFollowTarget;
 			
 			/**
 			 *	Subscriber associated to topic SUBSCRIBER_ROBOT_POSE.
@@ -217,12 +206,6 @@ namespace SSI
 			 *	@param message represents the message read from the topic.
 			 */
 			void goalDoneCallback(const move_base_msgs::MoveBaseActionResult::ConstPtr& message);
-			
-			/**
-			 *	Callback associated to goal topic.
-			 *	@param message represents the message read from the topic.
-			 */
-			void goalDoneFollowTargetCallback(const ::WaypointNavigation::FollowTargetActionResult::ConstPtr& message);
 			
 			/**
 			 *	Initialization of every structure used.

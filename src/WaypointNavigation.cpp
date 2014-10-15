@@ -2,9 +2,9 @@
 #include "WaypointNavigationNames.h"
 #include "Utils/Utils.h"
 #include <ros/ros.h>
-#include <tf/LinearMath/Matrix3x3.h>
 #include <tf/transform_broadcaster.h>
-#include <LinearMath/btQuaternion.h>
+#include <tf/LinearMath/Matrix3x3.h>
+#include <tf/LinearMath/Quaternion.h>
 #include <fstream>
 
 using namespace std;
@@ -15,8 +15,6 @@ using move_base_msgs::MoveBaseActionResult;
 using move_base_msgs::MoveBaseGoal;
 using nav_msgs::Odometry;
 using std_msgs::String;
-using WaypointNavigation::FollowTargetActionResult;
-using WaypointNavigation::FollowTargetGoal;
 
 namespace SSI
 {
@@ -32,14 +30,12 @@ namespace SSI
 		subscriberCommandPath = nodeHandle.subscribe<String>(SUBSCRIBER_POINTS_LIST_STRING,1,boost::bind(&SSI::WaypointNavigation::commandPathCallback,this,_1));
 		subscriberCommandControl = nodeHandle.subscribe<String>(SUBSCRIBER_COMMAND_LOAD,1,boost::bind(&SSI::WaypointNavigation::commandLoadCallback,this,_1));
 		subscriberGoalDone = nodeHandle.subscribe<>(SUBSCRIBER_GOAL_DONE,1024,&SSI::WaypointNavigation::goalDoneCallback,this);
-		subscriberGoalDoneFollowTarget = nodeHandle.subscribe<>(SUBSCRIBER_GOAL_DONE_FOLLOW_TARGET,1024,&SSI::WaypointNavigation::goalDoneFollowTargetCallback,this);
 		subscriberRobotPose = nodeHandle.subscribe(SUBSCRIBER_ROBOT_POSE,1024,&SSI::WaypointNavigation::updateRobotPose,this);
 		
 		publisherStringFeedback = nodeHandle.advertise<String>(PUBLISHER_END_PATH,1);
 		publisherCoordinationFeedback = nodeHandle.advertise<String>(PUBLISHER_FEEDBACK_MOTION,1);
 		
 		actionClient = new actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction>("move_base",true);
-		actionClientFollowTarget = new actionlib::SimpleActionClient< ::WaypointNavigation::FollowTargetAction>("followTarget",true);
 		
 		Utils::println(string("File to read: ") + pathFilename + string("."),Utils::Yellow);
 	}
@@ -47,7 +43,6 @@ namespace SSI
 	WaypointNavigation::~WaypointNavigation()
 	{
 		if (actionClient != 0) delete actionClient;
-		if (actionClientFollowTarget != 0) delete actionClientFollowTarget;
 	}
 	
 	pair<string,WaypointNavigation::Waypoints> WaypointNavigation::emptyWaypointList()
@@ -210,46 +205,6 @@ namespace SSI
 		}
 	}
 	
-	void WaypointNavigation::goalDoneFollowTargetCallback(const FollowTargetActionResult::ConstPtr&)
-	{
-		string state;
-		
-		state = actionClientFollowTarget->getState().toString();
-		
-		Utils::print("Client response (FollowTarget) -> ",Utils::White);
-		Utils::println(state,Utils::Cyan);
-		
-		if ((state == "SUCCEEDED") || (state == "ACTIVE"))
-		{
-			String feedback;
-			stringstream s;
-			
-			if (nextPoint == posesQueue.end()) s << "Robot " << agentId << " " << ((pathName == "") ? "none" : pathName) << " done";
-			else s << "Agent " << agentId << " none" << ((posesQueue.size() == 1) ? " doneChasing" : " donePatroling");
-			
-			feedback.data = s.str();
-			publisherCoordinationFeedback.publish(feedback);
-			
-			goToNextGoal();
-		}
-		else
-		{
-			if ((state == "PREEMPTED") && (posesQueue.size() > 0))
-			{
-				Utils::println("I gotta send the point again.",Utils::Yellow);
-				
-				/// I send the point again.
-				if (pathIndex >= 0)
-				{
-					--pathIndex;
-					--nextPoint;
-				}
-				
-				goToNextGoal();
-			}
-		}
-	}
-	
 	void WaypointNavigation::goToNextGoal()
 	{
 		if ((nextPoint == posesQueue.end()) && isCyclic) nextPoint = posesQueue.begin();
@@ -298,21 +253,6 @@ namespace SSI
 				
 				actionClient->sendGoal(goal);
 			}
-			else
-			{
-				FollowTargetGoal goal;
-				
-				goal.target_pose.header.frame_id = temp.str();
-				goal.target_pose.header.stamp = Time::now();
-				
-				/// rand is used to avoid nasty behaviors...
-				goal.target_pose.pose.position.x = nextPoint->position.x + ((rand() % 2) * 0.1);
-				goal.target_pose.pose.position.y = nextPoint->position.y;
-				goal.target_pose.pose.orientation.z = nextPoint->orientation.z;
-				goal.target_pose.pose.orientation.w = nextPoint->orientation.w;
-								
-				actionClientFollowTarget->sendGoal(goal);
-			}
 			
 			++pathIndex;
 			++nextPoint;
@@ -332,7 +272,6 @@ namespace SSI
 			publisherStringFeedback.publish(message);
 			
 			if (isMoveBase) actionClient->cancelAllGoals();
-			else actionClientFollowTarget->cancelAllGoals();
 		}
 	}
 	
@@ -350,19 +289,6 @@ namespace SSI
 			}
 			
 			Utils::println("move_base has started!",Utils::Magenta);
-		}
-		else
-		{
-			Utils::println("Waiting that followTarget comes up...",Utils::White);
-			
-			if (!actionClientFollowTarget->waitForServer())
-			{
-				Utils::println("Action server is not responding...",Utils::Red);
-				
-				return false;
-			}
-			
-			Utils::println("followTarget has started!",Utils::Magenta);
 		}
 		
 		/// A stop command is inserted in the queue.
@@ -524,7 +450,7 @@ namespace SSI
 		
 		const Quaternion& q = message->pose.pose.orientation;
 		
-		tf::Matrix3x3(btQuaternion(q.x,q.y,q.z,q.w)).getRPY(roll,pitch,yaw);
+		tf::Matrix3x3(tf::Quaternion(q.x,q.y,q.z,q.w)).getRPY(roll,pitch,yaw);
 		
 		robotPoseX = -message->pose.pose.position.y;
 		robotPoseY = message->pose.pose.position.x;

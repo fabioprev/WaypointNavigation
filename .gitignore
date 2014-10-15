@@ -1,10 +1,6 @@
-/bin
-/build
-WaypointNavigation.config
-WaypointNavigation.creator
-WaypointNavigation.creator.user
-WaypointNavigation.files
-WaypointNavigation.includes
+# Building folder
+bin
+build
 
 # Compiled Object files
 *.slo

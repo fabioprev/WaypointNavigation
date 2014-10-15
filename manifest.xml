@@ -19,7 +19,6 @@
 	
 	<depend package="actionlib"/>
 	<depend package="actionlib_msgs"/>
-	<!-- depend package="dis_robots"/ -->
 	<depend package="geometry_msgs"/>
 	<depend package="move_base"/>
 	<depend package="move_base_msgs"/>
