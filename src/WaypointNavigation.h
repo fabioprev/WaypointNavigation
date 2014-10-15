@@ -4,6 +4,7 @@
 #include <actionlib/client/simple_action_client.h>
 #include <geometry_msgs/Pose.h>
 #include <move_base_msgs/MoveBaseAction.h>
+#include <WaypointNavigation/FollowTargetAction.h>
 #include <ros/node_handle.h>
 #include <nav_msgs/Odometry.h>
 #include <std_msgs/String.h>
@@ -14,7 +15,7 @@ namespace SSI
 	class WaypointNavigation
 	{
 		protected:
-			typedef std::list<geometry_msgs::Pose> PosesQueue;
+			typedef std::vector<geometry_msgs::Pose> PosesQueue;
 			
 			/**
 			 *	Represents the Waypoint structure.
@@ -36,9 +37,14 @@ namespace SSI
 			typedef std::map<std::string,Waypoints> MapPosesQueue;
 			
 			/**
-			 *	Represents the object used for communicating with the localizer node.
+			 *	Represents the object used for communicating with the move_base navigation node.
 			 */
-			actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> actionClient;
+			actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction>* actionClient;
+			
+			/**
+			 *	Represents the object used for communicating with the follow_target navigation node.
+			 */
+			actionlib::SimpleActionClient< ::WaypointNavigation::FollowTargetAction>* actionClientFollowTarget;
 			
 			/**
 			 *	Handle to a ros node.
@@ -59,6 +65,11 @@ namespace SSI
 			 *	Subscriber associated to topic SUBSCRIBER_GOAL_DONE.
 			 */
 			ros::Subscriber subscriberGoalDone;
+			
+			/**
+			 *	Subscriber associated to topic SUBSCRIBER_GOAL_DONE.
+			 */
+			ros::Subscriber subscriberGoalDoneFollowTarget;
 			
 			/**
 			 *	Subscriber associated to topic SUBSCRIBER_ROBOT_POSE.
@@ -101,6 +112,16 @@ namespace SSI
 			std::string pathFilename;
 			
 			/**
+			 *	Represents the current path in execution.
+			 */
+			std::string pathName;
+			
+			/**
+			 *	Represents the last path executed.
+			 */
+			std::string lastPathName;
+			
+			/**
 			 *	Represents the robot pose.
 			 */
 			double robotPoseX, robotPoseY, robotPoseTheta;
@@ -116,6 +137,16 @@ namespace SSI
 			int agentId;
 			
 			/**
+			 *	Represents the last index of the action in execution.
+			 */
+			int lastPathIndex;
+			
+			/**
+			 *	Represents the index of the action in execution.
+			 */
+			int pathIndex;
+			
+			/**
 			 *	Am I executing a given path?
 			 */
 			bool executingPath;
@@ -124,6 +155,11 @@ namespace SSI
 			 *	Is it a cyclic path?
 			 */
 			bool isCyclic;
+			
+			/**
+			 *	Am I using move base?
+			 */
+			bool isMoveBase;
 			
 			/**
 			 *	@return returns an empty waypoints list.
@@ -156,9 +192,8 @@ namespace SSI
 		public:
 			/**
 			 *	Class constructor. Here, every ROS structure is inizialized.
-			 *	@param serverActionName the name of the server action. Called in the function main.
 			 */
-			WaypointNavigation(const std::string& serverActionName);
+			WaypointNavigation();
 			
 			/**
 			 *	Class destructor. Here, every structure is destroyed.
@@ -182,6 +217,12 @@ namespace SSI
 			 *	@param message represents the message read from the topic.
 			 */
 			void goalDoneCallback(const move_base_msgs::MoveBaseActionResult::ConstPtr& message);
+			
+			/**
+			 *	Callback associated to goal topic.
+			 *	@param message represents the message read from the topic.
+			 */
+			void goalDoneFollowTargetCallback(const ::WaypointNavigation::FollowTargetActionResult::ConstPtr& message);
 			
 			/**
 			 *	Initialization of every structure used.

@@ -15,34 +15,40 @@ using move_base_msgs::MoveBaseActionResult;
 using move_base_msgs::MoveBaseGoal;
 using nav_msgs::Odometry;
 using std_msgs::String;
+using WaypointNavigation::FollowTargetActionResult;
+using WaypointNavigation::FollowTargetGoal;
 
 namespace SSI
 {
-	WaypointNavigation::WaypointNavigation(const string& serverActionName) : actionClient(serverActionName,true), nodeHandle("~"),
-																			 nextPoint(0), pathDirectory(""), pathFilename(""),
-																			 executingPath(false), isCyclic(false)
+	WaypointNavigation::WaypointNavigation() : nodeHandle("~"), nextPoint(0), pathDirectory(""), pathFilename(""), pathName(""), lastPathName(""), lastPathIndex(0),
+											   pathIndex(-1), executingPath(false), isCyclic(false)
 	{
 		nodeHandle.getParam("agentId",agentId);
 		nodeHandle.getParam(PARAMS_FILE_NAME_SERVER,pathFilename);
+		nodeHandle.getParam("/isMoveBase",isMoveBase);
 		
 		pathDirectory = pathFilename.substr(0,pathFilename.rfind("/"));
 		
-		subscriberCommandPath = nodeHandle.subscribe<String>(SUBSCRIBER_POINTS_LIST_STRING,1,boost::bind(&SSI::WaypointNavigation::commandPathCallback,
-																										 this,_1));
-		
-		subscriberCommandControl = nodeHandle.subscribe<String>(SUBSCRIBER_COMMAND_LOAD,1,boost::bind(&SSI::WaypointNavigation::commandLoadCallback,
-																									  this,_1));
-		
+		subscriberCommandPath = nodeHandle.subscribe<String>(SUBSCRIBER_POINTS_LIST_STRING,1,boost::bind(&SSI::WaypointNavigation::commandPathCallback,this,_1));
+		subscriberCommandControl = nodeHandle.subscribe<String>(SUBSCRIBER_COMMAND_LOAD,1,boost::bind(&SSI::WaypointNavigation::commandLoadCallback,this,_1));
 		subscriberGoalDone = nodeHandle.subscribe<>(SUBSCRIBER_GOAL_DONE,1024,&SSI::WaypointNavigation::goalDoneCallback,this);
+		subscriberGoalDoneFollowTarget = nodeHandle.subscribe<>(SUBSCRIBER_GOAL_DONE_FOLLOW_TARGET,1024,&SSI::WaypointNavigation::goalDoneFollowTargetCallback,this);
 		subscriberRobotPose = nodeHandle.subscribe(SUBSCRIBER_ROBOT_POSE,1024,&SSI::WaypointNavigation::updateRobotPose,this);
 		
 		publisherStringFeedback = nodeHandle.advertise<String>(PUBLISHER_END_PATH,1);
 		publisherCoordinationFeedback = nodeHandle.advertise<String>(PUBLISHER_FEEDBACK_MOTION,1);
 		
+		actionClient = new actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction>("move_base",true);
+		actionClientFollowTarget = new actionlib::SimpleActionClient< ::WaypointNavigation::FollowTargetAction>("followTarget",true);
+		
 		Utils::println(string("File to read: ") + pathFilename + string("."),Utils::Yellow);
 	}
 	
-	WaypointNavigation::~WaypointNavigation() {;}
+	WaypointNavigation::~WaypointNavigation()
+	{
+		if (actionClient != 0) delete actionClient;
+		if (actionClientFollowTarget != 0) delete actionClientFollowTarget;
+	}
 	
 	pair<string,WaypointNavigation::Waypoints> WaypointNavigation::emptyWaypointList()
 	{
@@ -60,6 +66,18 @@ namespace SSI
 		s >> command >> filename;
 		
 		if (command == "reloadfile") loadFilePath(pathDirectory + string("/") + filename);
+		else if (command == "reloadfile_reset")
+		{
+			pathName = "";
+			lastPathName = "";
+			lastPathIndex = 0;
+			pathIndex = -1;
+			executingPath = false;
+			
+			actionClient->cancelAllGoals();
+			
+			loadFilePath(pathDirectory + string("/") + filename);
+		}
 	}
 	
 	void WaypointNavigation::commandPathCallback(const String::ConstPtr& message)
@@ -69,7 +87,6 @@ namespace SSI
 		
 		/// Checking if the path already exists. If so, I load it otherwise I check if it is valid and then I load it.
 		stringstream pathStream(stringstream::in | stringstream::out);
-		string pathName;
 		bool isPathLoaded;
 		
 		pathStream << message->data;
@@ -81,15 +98,57 @@ namespace SSI
 			return;
 		}
 		
-		/// Resetting current path.
-		posesQueue.clear();
-		nextPoint = posesQueue.end();
-		
 		pathStream >> pathName;
 		
 		transform(pathName.begin(),pathName.end(),pathName.begin(),::tolower);
 		
-		if (pathName == "cancelling") actionClient.cancelAllGoals();
+		if (strcasecmp(pathName.c_str(),lastPathName.c_str()) != 0)
+		{
+			/// Resetting current path.
+			posesQueue.clear();
+			nextPoint = posesQueue.end();
+			
+			if (pathName == "cancelling")
+			{
+				lastPathName = "";
+				pathIndex = -1;
+				executingPath = false;
+				
+				actionClient->cancelAllGoals();
+			}
+			else if (pathName == "interrupt")
+			{
+				if (pathIndex >= 0) lastPathIndex = pathIndex;
+				
+				executingPath = false;
+				actionClient->cancelAllGoals();
+			}
+			else
+			{
+				MapPosesQueue::iterator it = posesQueueMap.find(pathName);
+				
+				if (it == posesQueueMap.end()) isPathLoaded = initCustomPath(pathStream);
+				else isPathLoaded = initStandardPath(it);
+				
+				if (isPathLoaded)
+				{
+					Utils::println("New path loaded correctly.\n",Utils::Green);
+					
+					if (pathName != "gotopose")
+					{
+						lastPathName = pathName;
+						pathIndex = -1;
+					}
+					
+					/// Cancelling old goals.
+					actionClient->cancelAllGoals();
+					goToNextGoal();
+					
+					executingPath = true;
+				}
+				else Utils::println("Failed in loading new path file.\n",Utils::Red);
+			}
+		}
 		else
 		{
 			MapPosesQueue::iterator it = posesQueueMap.find(pathName);
@@ -97,17 +156,17 @@ namespace SSI
 			if (it == posesQueueMap.end()) isPathLoaded = initCustomPath(pathStream);
 			else isPathLoaded = initStandardPath(it);
 			
-			if (isPathLoaded)
-			{
-				Utils::println("New path loaded correctly.\n",Utils::Green);
-				
-				/// Cancelling old goals.
-				actionClient.cancelAllGoals();
-				goToNextGoal();
-				
-				executingPath = true;
-			}
-			else Utils::println("Failed in loading new path file.\n",Utils::Red);
+			Utils::print("Resuming path ",Utils::Yellow);
+			Utils::println(pathName,Utils::Red);
+			
+			nextPoint = posesQueue.begin() + lastPathIndex;
+			pathIndex = lastPathIndex - 1;
+			
+			/// Cancelling old goals.
+			actionClient->cancelAllGoals();
+			goToNextGoal();
+			
+			executingPath = true;
 		}
 	}
 	
@@ -115,9 +174,9 @@ namespace SSI
 	{
 		string state;
 		
-		state = actionClient.getState().toString();
+		state = actionClient->getState().toString();
 		
-		Utils::print("Client response -> ",Utils::White);
+		Utils::print("Client response (MoveBase) -> ",Utils::White);
 		Utils::println(state,Utils::Cyan);
 		
 		if (state == "SUCCEEDED")
@@ -125,7 +184,8 @@ namespace SSI
 			String feedback;
 			stringstream s;
 			
-			s << "Agent " << agentId << ((posesQueue.size() == 1) ? " doneChasing" : " donePatroling");
+			if (nextPoint == posesQueue.end()) s << "Robot " << agentId << " " << ((pathName == "") ? "none" : pathName) << " done";
+			else s << "Agent " << agentId << " none" << ((posesQueue.size() == 1) ? " doneChasing" : " donePatroling");
 			
 			feedback.data = s.str();
 			publisherCoordinationFeedback.publish(feedback);
@@ -139,7 +199,52 @@ namespace SSI
 				Utils::println("I gotta send the point again.",Utils::Yellow);
 				
 				/// I send the point again.
-				--nextPoint;
+				if (pathIndex >= 0)
+				{
+					--pathIndex;
+					--nextPoint;
+				}
+				
+				goToNextGoal();
+			}
+		}
+	}
+	
+	void WaypointNavigation::goalDoneFollowTargetCallback(const FollowTargetActionResult::ConstPtr&)
+	{
+		string state;
+		
+		state = actionClientFollowTarget->getState().toString();
+		
+		Utils::print("Client response (FollowTarget) -> ",Utils::White);
+		Utils::println(state,Utils::Cyan);
+		
+		if ((state == "SUCCEEDED") || (state == "ACTIVE"))
+		{
+			String feedback;
+			stringstream s;
+			
+			if (nextPoint == posesQueue.end()) s << "Robot " << agentId << " " << ((pathName == "") ? "none" : pathName) << " done";
+			else s << "Agent " << agentId << " none" << ((posesQueue.size() == 1) ? " doneChasing" : " donePatroling");
+			
+			feedback.data = s.str();
+			publisherCoordinationFeedback.publish(feedback);
+			
+			goToNextGoal();
+		}
+		else
+		{
+			if ((state == "PREEMPTED") && (posesQueue.size() > 0))
+			{
+				Utils::println("I gotta send the point again.",Utils::Yellow);
+				
+				/// I send the point again.
+				if (pathIndex >= 0)
+				{
+					--pathIndex;
+					--nextPoint;
+				}
+				
 				goToNextGoal();
 			}
 		}
@@ -147,8 +252,6 @@ namespace SSI
 	
 	void WaypointNavigation::goToNextGoal()
 	{
-		MoveBaseGoal goal;
-		
 		if ((nextPoint == posesQueue.end()) && isCyclic) nextPoint = posesQueue.begin();
 		
 		/// Checking if the path is finished.
@@ -180,17 +283,39 @@ namespace SSI
 			
 			temp << "/robot_" << agentId << "/map";
 			
-			goal.target_pose.header.frame_id = temp.str();
-			goal.target_pose.header.stamp = Time::now();
+			if (isMoveBase)
+			{
+				MoveBaseGoal goal;
+				
+				goal.target_pose.header.frame_id = temp.str();
+				goal.target_pose.header.stamp = Time::now();
+				
+				/// rand is used to avoid nasty behaviors...
+				goal.target_pose.pose.position.x = nextPoint->position.x + ((rand() % 2) * 0.1);
+				goal.target_pose.pose.position.y = nextPoint->position.y;
+				goal.target_pose.pose.orientation.z = nextPoint->orientation.z;
+				goal.target_pose.pose.orientation.w = nextPoint->orientation.w;
+				
+				actionClient->sendGoal(goal);
+			}
+			else
+			{
+				FollowTargetGoal goal;
+				
+				goal.target_pose.header.frame_id = temp.str();
+				goal.target_pose.header.stamp = Time::now();
+				
+				/// rand is used to avoid nasty behaviors...
+				goal.target_pose.pose.position.x = nextPoint->position.x + ((rand() % 2) * 0.1);
+				goal.target_pose.pose.position.y = nextPoint->position.y;
+				goal.target_pose.pose.orientation.z = nextPoint->orientation.z;
+				goal.target_pose.pose.orientation.w = nextPoint->orientation.w;
+								
+				actionClientFollowTarget->sendGoal(goal);
+			}
 			
-			/// rand is used to avoid nasty behaviours...
-			goal.target_pose.pose.position.x = nextPoint->position.x + ((rand() % 2) * 0.1);
-			goal.target_pose.pose.position.y = nextPoint->position.y;
-			goal.target_pose.pose.orientation.z = nextPoint->orientation.z;
-			goal.target_pose.pose.orientation.w = nextPoint->orientation.w;
-			
+			++pathIndex;
 			++nextPoint;
-			actionClient.sendGoal(goal);
 		}
 		else
 		{
@@ -205,22 +330,40 @@ namespace SSI
 			executingPath = false;
 			
 			publisherStringFeedback.publish(message);
-			actionClient.cancelAllGoals();
+			
+			if (isMoveBase) actionClient->cancelAllGoals();
+			else actionClientFollowTarget->cancelAllGoals();
 		}
 	}
 	
 	bool WaypointNavigation::init()
 	{
-		Utils::println("Waiting that move_base's comes up...",Utils::White);
-		
-		if (!actionClient.waitForServer())
+		if (isMoveBase)
 		{
-			Utils::println("Action server is not responding...",Utils::Red);
+			Utils::println("Waiting that move_base comes up...",Utils::White);
 			
-			return false;
+			if (!actionClient->waitForServer())
+			{
+				Utils::println("Action server is not responding...",Utils::Red);
+				
+				return false;
+			}
+			
+			Utils::println("move_base has started!",Utils::Magenta);
 		}
-		
-		Utils::println("move_base started!",Utils::Magenta);
+		else
+		{
+			Utils::println("Waiting that followTarget comes up...",Utils::White);
+			
+			if (!actionClientFollowTarget->waitForServer())
+			{
+				Utils::println("Action server is not responding...",Utils::Red);
+				
+				return false;
+			}
+			
+			Utils::println("followTarget has started!",Utils::Magenta);
+		}
 		
 		/// A stop command is inserted in the queue.
 		posesQueueMap.insert(emptyWaypointList());
@@ -313,14 +456,13 @@ namespace SSI
 			return false;
 		}
 		
-		/// Clearing old points' list.
-		posesQueueMap.clear();
-		
 		while (getline(file,line))
 		{
 			istringstream iss(line);
 			
 			iss >> path;
+			
+			transform(path.begin(),path.end(),path.begin(),::tolower);
 			
 			/// Checking if the path has been already inserted in queue.
 			MapPosesQueue::iterator it = posesQueueMap.find(path);
@@ -356,8 +498,7 @@ namespace SSI
 					
 					stringstream s;
 					
-					s << "Adding to " << path << " point: (" << p.position.x << "," << p.position.y << "," << p.orientation.z << "," << p.orientation.w
-					  << ").";
+					s << "Adding to " << path << " point: (" << p.position.x << "," << p.position.y << "," << p.orientation.z << "," << p.orientation.w << ").";
 					
 					Utils::println(s.str(),Utils::White);
 				}
@@ -367,6 +508,7 @@ namespace SSI
 				/// Inserting the new path in the queue.
 				posesQueueMap.insert(make_pair<string,Waypoints>(path,newWaypoints));
 			}
+			else Utils::println("Found an existing path.",Utils::Magenta);
 		}
 		
 		Utils::println("File reading phase done.",Utils::Green);
@@ -389,7 +531,7 @@ namespace SSI
 		robotPoseTheta = (M_PI / 2) + yaw;
 		
 		/// Recovery procedure when the robot's stacking for some unknown reason...
-		if (executingPath)
+		if (/*isMoveBase &&*/ executingPath)
 		{
 			if ((fabs(robotPoseX - oldRobotPoseX) < 0.05) && (fabs(robotPoseY - oldRobotPoseY) < 0.05) && (fabs(robotPoseTheta - oldRobotPoseTheta) < 0.05))
 			{
@@ -400,12 +542,17 @@ namespace SSI
 				}
 				else
 				{
-					if ((Time::now().toNSec() - initialStackTime) > 2000000000)
+					if ((Time::now().toNSec() - initialStackTime) > 5000000000)
 					{
 						Utils::println("Robot's stacking... I gotta send the point again.",Utils::Yellow);
 						
 						/// I send the point again.
-						--nextPoint;
+						if (pathIndex >= 0)
+						{
+							--pathIndex;
+							--nextPoint;
+						}
+						
 						goToNextGoal();
 						
 						firstTime = true;
@@ -428,7 +575,7 @@ int main (int argc, char** argv)
 {
 	ros::init(argc,argv,"WaypointNavigation");
 	
-	SSI::WaypointNavigation waypointNavigation(SSI::ACTION_SERVER_NAME);
+	SSI::WaypointNavigation waypointNavigation;
 	
 	if (!waypointNavigation.init())
 	{

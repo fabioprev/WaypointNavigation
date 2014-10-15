@@ -3,9 +3,9 @@
 <F12>  Example move_base configuration. Descriptions of parameters, as well as a full list of all amcl parameters, can be found at http://www.ros.org/wiki/move_base.
 -->
 	<node pkg="move_base" type="move_base" respawn="false" name="move_base_node" output="screen">
-		<remap from="map" to="/map" />
+		<!--<remap from="map" to="/map" />-->
 		<remap from="odom" to="odom" />
-		<remap from="cmd_vel" to="cmd_vel" />
+		<remap from="cmd_vel" to="move_base_cmd_vel" />
 
 		<rosparam file="$(find WaypointNavigation)/config/navigation/move_base_params.yaml" command="load" />
 		<rosparam file="$(find WaypointNavigation)/config/navigation/costmap_common_params.yaml" command="load" ns="global_costmap" />
