@@ -1,5 +1,5 @@
 #include "WaypointNavigation.h"
-#include "WaypointNavigationNames.h"
+#include "Utils/Topics.h"
 #include "Utils/Utils.h"
 #include <ros/ros.h>
 #include <tf/transform_broadcaster.h>

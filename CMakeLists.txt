@@ -21,7 +21,7 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 #uncomment if you have defined services
 #rosbuild_gensrv()
 
-file(GLOB_RECURSE WaypointNavigation_src src/*.cpp ../Utils/Utils.cpp)
+file(GLOB_RECURSE WaypointNavigation_src src/*.cpp)
 
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
