@@ -236,7 +236,8 @@ namespace SSI
 			
 			stringstream temp;
 			
-			temp << "/robot_" << agentId << "/map";
+			//temp << "/robot_" << agentId << "/map";
+			temp << "/map";
 			
 			if (isMoveBase)
 			{
