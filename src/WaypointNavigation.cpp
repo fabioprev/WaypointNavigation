@@ -32,8 +32,9 @@ namespace SSI
 		subscriberGoalDone = nodeHandle.subscribe<>(SUBSCRIBER_GOAL_DONE,1024,&SSI::WaypointNavigation::goalDoneCallback,this);
 		subscriberRobotPose = nodeHandle.subscribe(SUBSCRIBER_ROBOT_POSE,1024,&SSI::WaypointNavigation::updateRobotPose,this);
 		
-		publisherStringFeedback = nodeHandle.advertise<String>(PUBLISHER_END_PATH,1);
+		publisherCommandPath = nodeHandle.advertise<String>(SUBSCRIBER_POINTS_LIST_STRING,1);
 		publisherCoordinationFeedback = nodeHandle.advertise<String>(PUBLISHER_FEEDBACK_MOTION,1);
+		publisherStringFeedback = nodeHandle.advertise<String>(PUBLISHER_END_PATH,1);
 		
 		actionClient = new actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction>("move_base",true);
 		
@@ -236,7 +237,6 @@ namespace SSI
 			
 			stringstream temp;
 			
-			//temp << "/robot_" << agentId << "/map";
 			temp << "/map";
 			
 			if (isMoveBase)
@@ -305,6 +305,12 @@ namespace SSI
 			Utils::println("********************************************************\n",Utils::Blue);
 		}
 		else Utils::println("Unable to read waypoints' list file.",Utils::Yellow);
+		
+		String command;
+		
+		command.data = "Path_0";
+		
+		publisherCommandPath.publish(command);
 		
 		return loadFile;
 	}

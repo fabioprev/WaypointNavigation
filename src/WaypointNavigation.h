@@ -66,14 +66,19 @@ namespace SSI
 			ros::Subscriber subscriberRobotPose;
 			
 			/**
-			 *	Publisher for sending responses to whom subscribed PUBLISHER_END_PATH.
+			 *	Publisher for sending a command to whom subscribed SUBSCRIBER_POINTS_LIST_STRING.
 			 */
-			ros::Publisher publisherStringFeedback;
+			ros::Publisher publisherCommandPath;
 			
 			/**
 			 *	Publisher for sending feedback to whom subscribed PUBLISHER_FEEDBACK_MOTION.
 			 */
 			ros::Publisher publisherCoordinationFeedback;
+			
+			/**
+			 *	Publisher for sending responses to whom subscribed PUBLISHER_END_PATH.
+			 */
+			ros::Publisher publisherStringFeedback;
 			
 			/**
 			 *	Represents the map of points' list.
