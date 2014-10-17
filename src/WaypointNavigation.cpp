@@ -203,6 +203,23 @@ namespace SSI
 				
 				goToNextGoal();
 			}
+			else if (state == "ACTIVE")
+			{
+				mutex.lock();
+				
+				--nextPoint;
+				
+				if ((fabs(robotPoseX - nextPoint->position.x) < 1.0) && (fabs(robotPoseY - nextPoint->position.y) < 1.0))
+				{
+					Utils::println("Robot has reached the goal.",Utils::Blue);
+					
+					++nextPoint;
+				}
+				
+				goToNextGoal();
+				
+				mutex.unlock();
+			}
 		}
 	}
 	
@@ -459,11 +476,15 @@ namespace SSI
 		
 		tf::Matrix3x3(tf::Quaternion(q.x,q.y,q.z,q.w)).getRPY(roll,pitch,yaw);
 		
-		robotPoseX = -message->pose.pose.position.y;
-		robotPoseY = message->pose.pose.position.x;
-		robotPoseTheta = (M_PI / 2) + yaw;
+		mutex.lock();
 		
-		/// Recovery procedure when the robot's stacking for some unknown reason...
+		robotPoseX = message->pose.pose.position.x;
+		robotPoseY = message->pose.pose.position.y;
+		robotPoseTheta = yaw;
+		
+		mutex.unlock();
+		
+		/// Recovery procedure when the robot's stacking for an unknown reason...
 		if (/*isMoveBase &&*/ executingPath)
 		{
 			if ((fabs(robotPoseX - oldRobotPoseX) < 0.05) && (fabs(robotPoseY - oldRobotPoseY) < 0.05) && (fabs(robotPoseTheta - oldRobotPoseTheta) < 0.05))
@@ -475,7 +496,7 @@ namespace SSI
 				}
 				else
 				{
-					if ((Time::now().toNSec() - initialStackTime) > 5000000000)
+					if ((Time::now().toNSec() - initialStackTime) > 2e9)
 					{
 						Utils::println("Robot's stacking... I gotta send the point again.",Utils::Yellow);
 						

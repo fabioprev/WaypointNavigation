@@ -96,6 +96,11 @@ namespace SSI
 			PosesQueue::iterator nextPoint;
 			
 			/**
+			 *	Mutex to synchronize the access to the robotPose;
+			 */
+			boost::mutex mutex;
+			
+			/**
 			 *	Represents the path of the directory containing all the files.
 			 */
 			std::string pathDirectory;
