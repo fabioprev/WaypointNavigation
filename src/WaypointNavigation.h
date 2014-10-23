@@ -3,11 +3,15 @@
 
 #include <actionlib/client/simple_action_client.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <move_base_msgs/MoveBaseAction.h>
 #include <ros/node_handle.h>
 #include <nav_msgs/Odometry.h>
 #include <std_msgs/String.h>
 #include <list>
+
+/// Uncomment if you want get the robot pose from the localizer algorithm.
+//#define LOCALIZER
 
 namespace SSI
 {
@@ -64,11 +68,6 @@ namespace SSI
 			 *	Subscriber associated to topic SUBSCRIBER_ROBOT_POSE.
 			 */
 			ros::Subscriber subscriberRobotPose;
-			
-			/**
-			 *	Publisher for sending a command to whom subscribed SUBSCRIBER_POINTS_LIST_STRING.
-			 */
-			ros::Publisher publisherCommandPath;
 			
 			/**
 			 *	Publisher for sending feedback to whom subscribed PUBLISHER_FEEDBACK_MOTION.
@@ -161,12 +160,17 @@ namespace SSI
 			bool isMoveBase;
 			
 			/**
+			 *	Check if the robot is stacking.
+			 */
+			void checkRobotStacked();
+			
+			/**
 			 *	@return returns an empty waypoints list.
 			 */
 			static std::pair<std::string,Waypoints> emptyWaypointList();
 			
 			/**
-			 *	In order to send a new goal to amcl node.
+			 *	In order to send a new goal to move_base.
 			 */
 			void goToNextGoal();
 			
@@ -223,11 +227,19 @@ namespace SSI
 			 */
 			bool init();
 			
+#ifndef LOCALIZER
 			/**
 			 *	Callback associated to robot pose topic.
 			 *	@param message represents the message read from the topic.
 			 */
 			void updateRobotPose(const nav_msgs::Odometry::ConstPtr& message);
+#else
+			/**
+			 *	Callback associated to robot pose topic.
+			 *	@param message represents the message read from the topic.
+			 */
+			void updateRobotPose(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& message);
+#endif
 	};
 }
 

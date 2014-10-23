@@ -9,8 +9,9 @@
 
 using namespace std;
 using namespace ros;
-using geometry_msgs::Pose;
 using geometry_msgs::Quaternion;
+using geometry_msgs::Pose;
+using geometry_msgs::PoseWithCovarianceStamped;
 using move_base_msgs::MoveBaseActionResult;
 using move_base_msgs::MoveBaseGoal;
 using nav_msgs::Odometry;
@@ -32,7 +33,6 @@ namespace SSI
 		subscriberGoalDone = nodeHandle.subscribe<>(SUBSCRIBER_GOAL_DONE,1024,&SSI::WaypointNavigation::goalDoneCallback,this);
 		subscriberRobotPose = nodeHandle.subscribe(SUBSCRIBER_ROBOT_POSE,1024,&SSI::WaypointNavigation::updateRobotPose,this);
 		
-		publisherCommandPath = nodeHandle.advertise<String>(SUBSCRIBER_POINTS_LIST_STRING,1);
 		publisherCoordinationFeedback = nodeHandle.advertise<String>(PUBLISHER_FEEDBACK_MOTION,1);
 		publisherStringFeedback = nodeHandle.advertise<String>(PUBLISHER_END_PATH,1);
 		
@@ -46,9 +46,49 @@ namespace SSI
 		if (actionClient != 0) delete actionClient;
 	}
 	
-	pair<string,WaypointNavigation::Waypoints> WaypointNavigation::emptyWaypointList()
+	void WaypointNavigation::checkRobotStacked()
 	{
-		return make_pair("stop",Waypoints());
+		static int64_t initialStackTime;
+		static bool firstTime = true;
+		
+		/// Recovery procedure when the robot's stacking for an unknown reason...
+		if (/*isMoveBase &&*/ executingPath)
+		{
+			if ((fabs(robotPoseX - oldRobotPoseX) < 0.05) && (fabs(robotPoseY - oldRobotPoseY) < 0.05) && (fabs(robotPoseTheta - oldRobotPoseTheta) < 0.05))
+			{
+				if (firstTime)
+				{
+					initialStackTime = Time::now().toNSec();
+					firstTime = false;
+				}
+				else
+				{
+					if ((Time::now().toNSec() - initialStackTime) > 2e9)
+					{
+						Utils::println("Robot's stacking... I gotta send the point again.",Utils::Yellow);
+						
+						/// I send the point again.
+						if (pathIndex >= 0)
+						{
+							--pathIndex;
+							--nextPoint;
+						}
+						
+						goToNextGoal();
+						
+						firstTime = true;
+					}
+				}
+			}
+			else
+			{
+				oldRobotPoseX = robotPoseX;
+				oldRobotPoseY = robotPoseY;
+				oldRobotPoseTheta = robotPoseTheta;
+				
+				firstTime = true;
+			}
+		}
 	}
 	
 	void WaypointNavigation::commandLoadCallback(const String::ConstPtr& message)
@@ -164,6 +204,11 @@ namespace SSI
 			
 			executingPath = true;
 		}
+	}
+	
+	pair<string,WaypointNavigation::Waypoints> WaypointNavigation::emptyWaypointList()
+	{
+		return make_pair("stop",Waypoints());
 	}
 	
 	void WaypointNavigation::goalDoneCallback(const MoveBaseActionResult::ConstPtr&)
@@ -323,12 +368,6 @@ namespace SSI
 		}
 		else Utils::println("Unable to read waypoints' list file.",Utils::Yellow);
 		
-		String command;
-		
-		command.data = "Path_0";
-		
-		publisherCommandPath.publish(command);
-		
 		return loadFile;
 	}
 	
@@ -466,10 +505,9 @@ namespace SSI
 		return true;
 	}
 	
+#ifndef LOCALIZER
 	void WaypointNavigation::updateRobotPose(const Odometry::ConstPtr& message)
 	{
-		static int64_t initialStackTime;
-		static bool firstTime = true;
 		double roll, pitch, yaw;
 		
 		const Quaternion& q = message->pose.pose.orientation;
@@ -484,45 +522,28 @@ namespace SSI
 		
 		mutex.unlock();
 		
-		/// Recovery procedure when the robot's stacking for an unknown reason...
-		if (/*isMoveBase &&*/ executingPath)
-		{
-			if ((fabs(robotPoseX - oldRobotPoseX) < 0.05) && (fabs(robotPoseY - oldRobotPoseY) < 0.05) && (fabs(robotPoseTheta - oldRobotPoseTheta) < 0.05))
-			{
-				if (firstTime)
-				{
-					initialStackTime = Time::now().toNSec();
-					firstTime = false;
-				}
-				else
-				{
-					if ((Time::now().toNSec() - initialStackTime) > 2e9)
-					{
-						Utils::println("Robot's stacking... I gotta send the point again.",Utils::Yellow);
-						
-						/// I send the point again.
-						if (pathIndex >= 0)
-						{
-							--pathIndex;
-							--nextPoint;
-						}
-						
-						goToNextGoal();
-						
-						firstTime = true;
-					}
-				}
-			}
-			else
-			{
-				oldRobotPoseX = robotPoseX;
-				oldRobotPoseY = robotPoseY;
-				oldRobotPoseTheta = robotPoseTheta;
-				
-				firstTime = true;
-			}
-		}
+		checkRobotStacked();
 	}
+#else
+	void WaypointNavigation::updateRobotPose(const PoseWithCovarianceStamped::ConstPtr& message)
+	{
+		double roll, pitch, yaw;
+		
+		const Quaternion& q = message->pose.pose.orientation;
+		
+		tf::Matrix3x3(tf::Quaternion(q.x,q.y,q.z,q.w)).getRPY(roll,pitch,yaw);
+		
+		mutex.lock();
+		
+		robotPoseX = message->pose.pose.position.x;
+		robotPoseY = message->pose.pose.position.y;
+		robotPoseTheta = yaw;
+		
+		mutex.unlock();
+		
+		checkRobotStacked();
+	}
+#endif
 }
 
 int main (int argc, char** argv)
