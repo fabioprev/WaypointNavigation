@@ -54,6 +54,31 @@ namespace SSI
 		/// Recovery procedure when the robot's stacking for an unknown reason...
 		if (/*isMoveBase &&*/ executingPath)
 		{
+			bool hasReachedGoal;
+			
+			mutex.lock();
+			
+			--nextPoint;
+			hasReachedGoal = false;
+			
+			if ((fabs(robotPoseX - nextPoint->position.x) < 1.0) && (fabs(robotPoseY - nextPoint->position.y) < 1.0))
+			{
+				Utils::println("Robot has reached the goal.",Utils::Blue);
+				
+				hasReachedGoal = true;
+			}
+			
+			++nextPoint;
+			
+			mutex.unlock();
+			
+			if (hasReachedGoal)
+			{
+				goToNextGoal();
+				
+				return;
+			}
+			
 			if ((fabs(robotPoseX - oldRobotPoseX) < 0.05) && (fabs(robotPoseY - oldRobotPoseY) < 0.05) && (fabs(robotPoseTheta - oldRobotPoseTheta) < 0.05))
 			{
 				if (firstTime)
@@ -71,7 +96,6 @@ namespace SSI
 						if (pathIndex >= 0)
 						{
 							--pathIndex;
-							--nextPoint;
 						}
 						
 						goToNextGoal();
