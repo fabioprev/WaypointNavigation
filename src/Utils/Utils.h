@@ -1,5 +1,4 @@
-#ifndef UTILS_H
-#define UTILS_H
+#pragma once
 
 #include <map>
 #include <string>
@@ -67,5 +66,3 @@ namespace SSI
 			~Utils();
 	};
 }
-
-#endif

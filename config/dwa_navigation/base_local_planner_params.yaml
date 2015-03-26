@@ -1,0 +1,24 @@
+DWAPlannerROS:
+  sim_time: 3
+  sim_granularity: 0.01
+  max_vel_x: 5.0
+  min_vel_x: 0.3
+  max_rot_vel: 2
+  min_rot_vel: -0.1
+  rot_stopped_vel: 0.4
+  use_dwa: true
+
+  acc_lim_th: 0.9
+  acc_lim_x: 1.0
+  acc_lim_y: 0.0
+
+  yaw_goal_tolerance: 0.2
+  xy_goal_tolerance: 0.1
+
+  path_distance_bias: 15
+  goal_distance_bias: 15
+  occdist_scale: 0.05
+  stop_time_buffer: 0.9
+  penalize_negative_x: true
+
+  oscillation_reset_dist: 0.1

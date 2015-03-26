@@ -1,0 +1,67 @@
+<launch>
+    <!-- Launch this file through the gui in living_at_diag/scripts/launcher.py -->
+    
+    <arg name="map_name"  default="DISlabs"/>
+    <arg name="robot_name" default="turtlebot0"/>
+    <arg name="agentId" default="0"/>
+    <arg name="init_x" default="10.0" />
+    <arg name="init_y" default="20.0" />
+    <arg name="init_a" default="1.57" />
+    <arg name="init_cov" default="0.25" />
+    <arg name="robotPort" default="/dev/ttyUSB0"/>
+    <arg name="laserPort" default="/dev/ttyACM0"/>
+    <arg name="joyPort" default="/dev/ttyACM3"/>
+    <!--param name="robot_name" value="$(arg robot_name)"/-->
+    <arg name="home_x" default="8.0" />
+    <arg name="home_y" default="2.0" />
+    <arg name="home_th" default="0.0" />
+    <param name="/home_x" value="$(arg home_x)"/>
+    <param name="/home_y" value="$(arg home_y)"/>
+    <param name="/home_th" value="$(arg home_th)"/> 
+    <arg name="single_robot" default="true"/>
+    
+    <group if="$(arg single_robot)">
+		<param name="/home_x" value="$(arg home_x)"/> 
+		<param name="/home_y" value="$(arg home_y)"/> 
+		<param name="/home_th" value="$(arg home_th)"/> 
+		<!--param name="robot_name" value="$(arg robot_name)"/-->
+		<param name="isMoveBase" value="true"/>
+
+		<param name="emergency_stop" type="int" value="0" />
+
+		<include file="$(find way_point_navigation)/launch/map.launch">
+		  <arg name="map_name" value="$(arg map_name)" />
+		</include>
+    </group>
+
+    <include file="$(find turtlebot_setup)/launch/navigation.launch">
+        <arg name="robot_name" value="$(arg robot_name)"/>
+	<arg name="initial_pose_x" value="$(arg init_x)"/> 
+	<arg name="initial_pose_y" value="$(arg init_y)"/> 
+	<arg name="initial_pose_a" value="$(arg init_a)"/>
+    </include>    
+
+    <group ns="$(arg robot_name)">
+	<param name="robot_name" value="$(arg robot_name)" />
+        <param name="tf_prefix" value="$(arg robot_name)" />
+
+	    <!--remap from="way_point_navigation/base_pose_ground_truth" to="base_pose_ground_truth" /-->
+		<remap from="way_point_navigation/base_pose_ground_truth" to="amcl_pose" /> 
+    	<remap from="way_point_navigation/Results" to="move_base/result" />
+   		<remap from="way_point_navigation/PointsListString" to="r_coordination/targetPose" /> 
+		<remap from="way_point_navigation/CommandLoad" to="r_coordination/commandLoad" />
+
+		<node name="way_point_navigation" pkg="way_point_navigation" type="way_point_navigation"> 
+            <param name="agentId" value="$(arg agentId)"/>
+            <param name="pathFilename" value="$(find way_point_navigation)/config/paths/empty.path"/> 
+    	</node>
+
+        <node pkg="laser_analysis" type="laserobstacle" args=""  name="laserobstacle" output="screen">
+            <param name="~laser_frame_id" value="$(arg robot_name)/laser_frame" />
+        </node>
+		<node name="link_broadcaster_3" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 /$(arg robot_name)/base_footprint_frame /$(arg robot_name)/base_link 0.2" />
+		<node name="link_broadcaster_2" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 /$(arg robot_name)/base_link /$(arg robot_name)/base_frame 0.2" />
+
+    </group> 
+
+</launch>

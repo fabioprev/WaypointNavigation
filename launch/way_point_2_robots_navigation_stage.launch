@@ -1,0 +1,56 @@
+<launch>
+    <arg name="map_name" default="DIAG_B1"/>
+    <arg name="init_x0" default="10.0" />
+    <arg name="init_y0" default="1.0" />
+    <arg name="init_a0" default="1.57" />
+    <arg name="init_x1" default="18.0" />
+    <arg name="init_y1" default="2.0" />
+    <arg name="init_a1" default="0.0" />
+
+    <arg name="init_cov" default="0.25" />
+	<arg name="single_robot" default="false"/>
+    <arg name="joyPort" default="/dev/input/js0"/>
+	
+	<param name="isMoveBase" value="true"/>
+
+    <param name="emergency_stop" type="int" value="0" />
+
+    <include file="$(find way_point_navigation)/launch/map.launch">
+      <arg name="map_name" value="$(arg map_name)" />
+    </include>
+    
+    <include file="$(find way_point_navigation)/launch/stage.launch">
+      <arg name="map_name" value="$(arg map_name)" />
+    </include>
+
+	<include file="$(find way_point_navigation)/launch/way_point_navigation_stage.launch">
+		<arg name="robot_name" value="robot0" />
+		<arg name="agentId" value="0"/>
+		<arg name="map_name"  value="$(arg map_name)"/>
+		<arg name="init_x" value="$(arg init_x0)" />
+		<arg name="init_y" value="$(arg init_y0)" />
+		<arg name="init_a" value="$(arg init_a0)" />
+		<arg name="init_cov" value="$(arg init_cov)" />
+		<arg name="joyPort" value="$(arg joyPort)"/>
+		<arg name="single_robot" value="$(arg single_robot)"/>
+		<!--arg name="home_x" value="$(arg home_x)" />
+		<arg name="home_y" value="$(arg home_y)" />
+		<arg name="home_th" value="$(arg home_th)" /-->	
+	</include>
+
+	<include file="$(find way_point_navigation)/launch/way_point_navigation_stage.launch">
+		<arg name="robot_name" value="robot1" />
+		<arg name="agentId" value="1"/>
+		<arg name="map_name"  value="$(arg map_name)"/>
+		<arg name="init_x" value="$(arg init_x1)" />
+		<arg name="init_y" value="$(arg init_y1)" />
+		<arg name="init_a" value="$(arg init_a1)" />
+		<arg name="init_cov" value="$(arg init_cov)" />
+		<arg name="joyPort" value="$(arg joyPort)"/>
+		<arg name="single_robot" value="$(arg single_robot)"/>
+		<!--arg name="home_x" value="$(arg home_x)" />
+		<arg name="home_y" value="$(arg home_y)" />
+		<arg name="home_th" value="$(arg home_th)" /-->
+	</include>
+
+</launch>
