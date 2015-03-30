@@ -19,8 +19,7 @@ using std_msgs::String;
 
 namespace SSI
 {
-	WaypointNavigation::WaypointNavigation() : nodeHandle("~"), nextPoint(0), pathDirectory("."), pathFilename(""), pathName(""), lastPathName(""), lastPathIndex(0),
-		pathIndex(-1), executingPath(false), isCyclic(false)
+	WaypointNavigation::WaypointNavigation() : nodeHandle("~"), nextPoint(0), pathDirectory("."), pathFilename(""), pathName(""), lastPathName(""), lastPathIndex(0), pathIndex(-1), executingPath(false), isCyclic(false)
 	{
 		nodeHandle.getParam("agentId",agentId);
 		nodeHandle.getParam(PARAMS_FILE_NAME_SERVER,pathFilename);
@@ -61,7 +60,9 @@ namespace SSI
 			--nextPoint;
 			hasReachedGoal = false;
 			
-			if ((fabs(robotPoseX - nextPoint->position.x) < GOAL_DISTANCE_THRESHOLD) && (fabs(robotPoseY - nextPoint->position.y) < GOAL_DISTANCE_THRESHOLD))
+			float theta = tf::getYaw(nextPoint->orientation);
+			
+			if ((fabs(robotPoseX - nextPoint->position.x) < GOAL_DISTANCE_THRESHOLD) && (fabs(robotPoseY - nextPoint->position.y) < GOAL_DISTANCE_THRESHOLD) && (fabs(robotPoseTheta - theta) < GOAL_ANGLE_THRESHOLD))
 			{
 				Utils::println("Robot has reached the goal.",Utils::Blue);
 				
@@ -106,9 +107,13 @@ namespace SSI
 			}
 			else
 			{
+				mutex.lock();
+				
 				oldRobotPoseX = robotPoseX;
 				oldRobotPoseY = robotPoseY;
 				oldRobotPoseTheta = robotPoseTheta;
+				
+				mutex.unlock();
 				
 				firstTime = true;
 			}
@@ -201,7 +206,7 @@ namespace SSI
 					}
 					
 					/// Cancelling old goals.
-					actionClient->cancelAllGoals();
+					//actionClient->cancelAllGoals();
 					goToNextGoal();
 					
 					executingPath = true;
@@ -223,7 +228,7 @@ namespace SSI
 			pathIndex = lastPathIndex - 1;
 			
 			/// Cancelling old goals.
-			actionClient->cancelAllGoals();
+			//actionClient->cancelAllGoals();
 			goToNextGoal();
 			
 			executingPath = true;
@@ -288,12 +293,16 @@ namespace SSI
 				
 				--nextPoint;
 				
-				if ((fabs(robotPoseX - nextPoint->position.x) < GOAL_DISTANCE_THRESHOLD) && (fabs(robotPoseY - nextPoint->position.y) < GOAL_DISTANCE_THRESHOLD))
+				float theta = tf::getYaw(nextPoint->orientation);
+				
+				if ((fabs(robotPoseX - nextPoint->position.x) < GOAL_DISTANCE_THRESHOLD) && (fabs(robotPoseY - nextPoint->position.y) < GOAL_DISTANCE_THRESHOLD) && (fabs(robotPoseTheta - theta) < GOAL_ANGLE_THRESHOLD))
 				{
 					Utils::println("Robot has reached the goal.",Utils::Blue);
-					String to_send_succ;
-					to_send_succ.data = /*_s.str() + " " + */"FINISHED";
-					publisherCoordinationFeedback.publish(to_send_succ);
+					
+					String toSendSucceeded;
+					
+					toSendSucceeded.data = /*_s.str() + " " + */"FINISHED";
+					publisherCoordinationFeedback.publish(toSendSucceeded);
 					
 					++nextPoint;
 				}
@@ -351,7 +360,9 @@ namespace SSI
 				goal.target_pose.pose.orientation.z = nextPoint->orientation.z;
 				goal.target_pose.pose.orientation.w = nextPoint->orientation.w;
 				
+				//actionClient->sendGoalAndWait(goal,Duration(0.0),Duration(1.0));
 				actionClient->sendGoal(goal);
+				//actionClient->cancelGoal();
 			}
 			
 			++pathIndex;
@@ -363,7 +374,7 @@ namespace SSI
 			
 			/// Here the navigation phase is done. There are 2 cases:
 			///		- the queue is empty so I received a stop command.
-			///		- the queue is not empty but I completed the path. In this case the navigation phase is indeed done.
+			///		- the queue is not empty but I completed the path. In this case the navigation phase is actually done.
 			if (posesQueue.size() > 0) message.data = PATH_DONE;
 			else message.data = PATH_STOP;
 			
@@ -371,7 +382,7 @@ namespace SSI
 			
 			publisherStringFeedback.publish(message);
 			
-			if (isMoveBase) actionClient->cancelAllGoals();
+			//if (isMoveBase) actionClient->cancelAllGoals();
 		}
 	}
 	

@@ -12,7 +12,8 @@
 /// Uncomment if you want get the robot pose from the localizer algorithm.
 //#define LOCALIZER
 
-static const float GOAL_DISTANCE_THRESHOLD = 1.0f;
+static const float GOAL_ANGLE_THRESHOLD		= 0.5;		/// In radiants.
+static const float GOAL_DISTANCE_THRESHOLD	= 1.0f;		/// In meters.
 
 namespace SSI
 {
