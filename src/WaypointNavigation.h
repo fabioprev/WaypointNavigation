@@ -5,7 +5,6 @@
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <move_base_msgs/MoveBaseAction.h>
-#include <nav_msgs/Odometry.h>
 #include <std_msgs/String.h>
 #include <list>
 
@@ -229,18 +228,18 @@ namespace SSI
 			 */
 			bool init();
 			
-#ifndef LOCALIZER
-			/**
-			 *	Callback associated to robot pose topic.
-			 *	@param message represents the message read from the topic.
-			 */
-			void updateRobotPose(const nav_msgs::Odometry::ConstPtr& message);
-#else
+//#ifndef LOCALIZER
+//			/**
+//			 *	Callback associated to robot pose topic.
+//			 *	@param message represents the message read from the topic.
+//			 */
+//			void updateRobotPose(const nav_msgs::Odometry::ConstPtr& message);
+//#else
 			/**
 			 *	Callback associated to robot pose topic.
 			 *	@param message represents the message read from the topic.
 			 */
 			void updateRobotPose(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& message);
-#endif
+//#endif
 	};
 }

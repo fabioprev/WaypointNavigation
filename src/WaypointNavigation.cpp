@@ -14,7 +14,6 @@ using geometry_msgs::Pose;
 using geometry_msgs::PoseWithCovarianceStamped;
 using move_base_msgs::MoveBaseActionResult;
 using move_base_msgs::MoveBaseGoal;
-using nav_msgs::Odometry;
 using std_msgs::String;
 
 namespace SSI
@@ -553,7 +552,7 @@ namespace SSI
 		return true;
 	}
 	
-#ifndef LOCALIZER
+/*#ifndef LOCALIZER
 	void WaypointNavigation::updateRobotPose(const Odometry::ConstPtr& message)
 	{
 		double roll, pitch, yaw;
@@ -572,7 +571,7 @@ namespace SSI
 		
 		checkRobotStacked();
 	}
-#else
+#else*/
 	void WaypointNavigation::updateRobotPose(const PoseWithCovarianceStamped::ConstPtr& message)
 	{
 		double roll, pitch, yaw;
@@ -591,7 +590,7 @@ namespace SSI
 		
 		checkRobotStacked();
 	}
-#endif
+//#endif
 }
 
 int main(int argc, char** argv)
